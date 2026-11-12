@@ -3,24 +3,21 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Bell, CalendarDays, ChevronLeft, ChevronRight, Globe, Phone, Wallet, Users } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
+import { Bell, CalendarDays, ChevronLeft, ChevronRight, Globe, Phone, Wallet, Users } from "lucide-react";
 import { WhatsAppIcon } from "@/components/site/icons";
-import { BRANCHES, STAFF, branchById, minutes, money, serviceById, wa, type BranchId } from "@/lib/data";
+import { BRANCHES, STAFF, branchById, minutes, money, wa, type BranchId, type Service } from "@/lib/data";
 import {
-  agendaFor,
   formatDay,
   fromISODate,
-  loadBookings,
   toHHMM,
   toISODate,
   toMin,
-  updateBookingStatus,
   type Booking,
   type BookingStatus,
 } from "@/lib/booking";
+import { listBookings, onBookingsChange, setBookingStatus, upcomingBookings } from "@/lib/bookings-api";
+import { hasDb } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { useHydrated } from "@/hooks/use-hydrated";
 
 const PX_PER_MIN = 1.6;
 
@@ -31,45 +28,56 @@ const STATUS: { id: BookingStatus; label: string; dot: string }[] = [
   { id: "cancelado", label: "Cancelado", dot: "bg-destructive" },
 ];
 
-/** The agenda depends on the salon's clock and this browser's bookings, so it only renders on the client. */
-export function Agenda() {
-  const hydrated = useHydrated();
-  return hydrated ? <AgendaBoard /> : <div className="min-h-dvh bg-ink" />;
-}
+type Loaded = { view: string; list: Booking[]; upcoming: Booking[]; error?: string };
 
-function AgendaBoard() {
+export function AgendaBoard({ services }: { services: Service[] }) {
   const [branchId, setBranchId] = useState<BranchId>("cordoba");
   const [now, setNow] = useState<Date>(() => new Date());
   const [date, setDate] = useState<string | null>(() => toISODate(now));
   const [tick, setTick] = useState(0);
   const [selected, setSelected] = useState<Booking | null>(null);
   const [overrides, setOverrides] = useState<Record<string, BookingStatus>>({});
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const svcName = useCallback((id: string) => services.find((s) => s.id === id)?.name ?? id, [services]);
 
+  // Refresh when a booking is created or changed (Supabase realtime, or this browser in demo mode).
   useEffect(() => {
-    const refresh = () => setTick((t) => t + 1);
-    window.addEventListener("ubee:bookings", refresh);
-    window.addEventListener("storage", refresh);
+    const off = onBookingsChange(() => setTick((t) => t + 1));
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => {
-      window.removeEventListener("ubee:bookings", refresh);
-      window.removeEventListener("storage", refresh);
+      off();
       clearInterval(id);
     };
   }, []);
 
-  const branch = branchById(branchId)!;
-  const team = STAFF.filter((s) => s.branches.includes(branchId));
+  const view = `${branchId}|${date}`;
+  useEffect(() => {
+    if (!date) return;
+    let alive = true;
+    Promise.all([listBookings(branchId, date), upcomingBookings(branchId, toISODate(new Date()))])
+      .then(([list, upcoming]) => alive && setLoaded({ view, list, upcoming }))
+      .catch((e: Error) => alive && setLoaded({ view, list: [], upcoming: [], error: e.message }));
+    return () => {
+      alive = false;
+    };
+  }, [branchId, date, view, tick]);
+  // While refreshing the same day, keep showing what we had (no flicker).
+  const current = loaded?.view === view ? loaded : null;
 
-  const day = useMemo(() => {
-    if (!date) return [];
-    const stored = loadBookings();
-    return team.map((s) => ({
-      staff: s,
-      list: agendaFor(s, branchId, date, stored).map((b) => ({ ...b, status: overrides[b.id] ?? b.status })),
-    }));
-    // tick forces a re-read after a booking changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, branchId, overrides, tick]);
+  const branch = branchById(branchId)!;
+  const team = useMemo(() => STAFF.filter((s) => s.branches.includes(branchId)), [branchId]);
+
+  const day = useMemo(
+    () =>
+      team.map((s) => ({
+        staff: s,
+        list: (current?.list ?? [])
+          .filter((b) => b.staffId === s.id)
+          .map((b) => ({ ...b, status: overrides[b.id] ?? b.status })),
+      })),
+    [team, current, overrides],
+  );
 
   const all = day.flatMap((d) => d.list);
   const active = all.filter((b) => b.status !== "cancelado");
@@ -78,15 +86,7 @@ function AgendaBoard() {
   const capacity = (close - open) * team.length;
   const busy = active.reduce((a, b) => a + b.duration, 0);
   const webCount = all.filter((b) => b.source === "web").length;
-  const upcomingWeb = useMemo(
-    () =>
-      loadBookings()
-        .filter((b) => b.branchId === branchId && b.status !== "cancelado")
-        .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
-        .slice(0, 6),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [branchId, tick],
-  );
+  const upcomingWeb = current?.upcoming ?? [];
 
   const shift = (n: number) => {
     if (!date) return;
@@ -96,62 +96,58 @@ function AgendaBoard() {
     setSelected(null);
   };
 
-  const setStatus = useCallback((b: Booking, s: BookingStatus) => {
-    if (b.source === "web") updateBookingStatus(b.id, s);
+  const setStatus = useCallback(async (b: Booking, s: BookingStatus) => {
+    const before = b.status;
+    setActionError(null);
     setOverrides((o) => ({ ...o, [b.id]: s }));
     setSelected((cur) => (cur && cur.id === b.id ? { ...cur, status: s } : cur));
+    try {
+      await setBookingStatus(b, s);
+    } catch {
+      setOverrides((o) => ({ ...o, [b.id]: before }));
+      setSelected((cur) => (cur && cur.id === b.id ? { ...cur, status: before } : cur));
+      setActionError("No se pudo cambiar el estado. Revisá la conexión e intentá de nuevo.");
+    }
   }, []);
 
   const closed = date ? !branch.hours.days.includes(fromISODate(date).getDay()) : false;
-  const nowMin = now && date === toISODate(now) ? now.getHours() * 60 + now.getMinutes() : null;
+  const nowMin = date === toISODate(now) ? now.getHours() * 60 + now.getMinutes() : null;
 
   return (
-    <div className="min-h-dvh bg-ink">
-      {/* top bar */}
-      <header className="sticky top-0 z-30 border-b border-bone/[0.07] bg-ink/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-4 px-4 md:px-8">
-          <Link href="/" aria-label="Ir al sitio" className="text-bone">
-            <Logo className="w-20" />
-          </Link>
-          <span className="hidden h-5 w-px bg-bone/15 sm:block" />
-          <span className="label-wide hidden text-stone sm:block">Panel del salón</span>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="flex rounded-full border border-bone/15 p-1">
-              {BRANCHES.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  aria-pressed={branchId === b.id}
-                  onClick={() => {
-                    setBranchId(b.id);
-                    setSelected(null);
-                  }}
-                  className={cn(
-                    "press h-9 rounded-full px-4 text-sm",
-                    branchId === b.id ? "bg-bone text-ink" : "text-bone/70 hover:text-bone",
-                  )}
-                >
-                  <span className="hidden sm:inline">{b.name}</span>
-                  <span className="sm:hidden">{b.name.replace("Villa ", "")}</span>
-                </button>
-              ))}
-            </div>
-            <Link
-              href="/"
-              className="hidden h-11 items-center gap-2 rounded-full px-3 text-sm text-bone/70 hover:text-bone md:flex"
-            >
-              Ver sitio <ArrowUpRight className="size-4" aria-hidden />
-            </Link>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <div className="mx-auto max-w-[1600px] px-4 py-6 md:px-8 md:py-8">
-        <p className="mb-6 rounded-2xl border border-filament/25 bg-filament/[0.06] px-4 py-3 text-sm text-bone/80">
-          <span className="text-filament-soft">Demo.</span> La agenda de ejemplo se genera sola; los turnos que reserves en
-          la web aparecen acá al instante, marcados como <span className="text-filament-soft">Web</span>. En la versión final
-          se conecta a una base de datos compartida por todo el equipo.
-        </p>
+        {!hasDb ? (
+          <p className="mb-6 rounded-2xl border border-filament/25 bg-filament/[0.06] px-4 py-3 text-sm text-bone/80">
+            <span className="text-filament-soft">Modo demo.</span> La agenda de ejemplo se genera sola y los turnos que
+            reserves en la web aparecen acá al instante, marcados como <span className="text-filament-soft">Web</span>.
+            Con la base de datos conectada, todo el equipo ve la misma agenda en tiempo real.
+          </p>
+        ) : null}
+        {current?.error || actionError ? (
+          <p role="alert" className="mb-6 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+            {actionError ?? `No pudimos cargar la agenda: ${current?.error}`}
+          </p>
+        ) : null}
+
+        <div className="mb-4 flex rounded-full border border-bone/15 p-1 sm:w-fit">
+          {BRANCHES.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              aria-pressed={branchId === b.id}
+              onClick={() => {
+                setBranchId(b.id);
+                setSelected(null);
+              }}
+              className={cn(
+                "press h-9 flex-1 rounded-full px-4 text-sm sm:flex-none",
+                branchId === b.id ? "bg-bone text-ink" : "text-bone/70 hover:text-bone",
+              )}
+            >
+              {b.name}
+            </button>
+          ))}
+        </div>
 
         {/* date + kpis */}
         <div className="mb-6 flex flex-wrap items-end justify-between gap-6">
@@ -262,7 +258,7 @@ function AgendaBoard() {
                         {list.map((b) => {
                           const top = (toMin(b.time) - open) * PX_PER_MIN;
                           const h = b.duration * PX_PER_MIN;
-                          const svc = b.serviceIds.map((id) => serviceById(id)?.name).join(" + ");
+                          const svc = b.serviceIds.map((id) => svcName(id)).join(" + ");
                           const st = STATUS.find((x) => x.id === b.status)!;
                           return (
                             <button
@@ -272,7 +268,7 @@ function AgendaBoard() {
                               className={cn(
                                 "press absolute inset-x-1.5 flex flex-col justify-start overflow-hidden rounded-xl border px-3 py-2 text-left transition-colors",
                                 b.source === "web"
-                                  ? "border-filament/70 bg-filament/[0.14] shadow-[0_0_20px_-6px_rgba(233,184,114,0.7)]"
+                                  ? "border-filament/70 bg-filament/[0.14] shadow-[0_0_20px_-6px_rgba(240,190,116,0.7)]"
                                   : "border-bone/10 bg-umber hover:border-bone/30",
                                 b.status === "cancelado" && "opacity-40",
                                 selected?.id === b.id && "ring-2 ring-filament",
@@ -297,7 +293,7 @@ function AgendaBoard() {
                     ))}
                     {nowMin !== null && nowMin > open && nowMin < close ? (
                       <div
-                        className="pointer-events-none absolute left-[64px] right-0 z-[5] h-px bg-filament shadow-[0_0_10px_1px_rgba(233,184,114,0.8)]"
+                        className="pointer-events-none absolute left-[64px] right-0 z-[5] h-px bg-filament shadow-[0_0_10px_1px_rgba(240,190,116,0.8)]"
                         style={{ top: (nowMin - open) * PX_PER_MIN }}
                       >
                         <span className="absolute -left-1 -top-1 size-2 rounded-full bg-filament" />
@@ -321,7 +317,12 @@ function AgendaBoard() {
                   transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
                   className="rounded-3xl border border-bone/10 bg-walnut p-6"
                 >
-                  <BookingDetail booking={selected} onStatus={(s) => setStatus(selected, s)} onClose={() => setSelected(null)} />
+                  <BookingDetail
+                    booking={selected}
+                    svcName={svcName}
+                    onStatus={(s) => void setStatus(selected, s)}
+                    onClose={() => setSelected(null)}
+                  />
                 </motion.div>
               ) : (
                 <motion.div
@@ -354,7 +355,7 @@ function AgendaBoard() {
                         <span className="min-w-0">
                           <span className="block truncate text-sm">{b.client.name}</span>
                           <span className="block truncate text-xs text-stone">
-                            {b.serviceIds.map((id) => serviceById(id)?.name).join(" + ")}
+                            {b.serviceIds.map((id) => svcName(id)).join(" + ")}
                           </span>
                         </span>
                         <span className="shrink-0 text-right text-xs text-bone/70 tabular">
@@ -384,16 +385,18 @@ function AgendaBoard() {
 
 function BookingDetail({
   booking,
+  svcName,
   onStatus,
   onClose,
 }: {
   booking: Booking;
+  svcName: (id: string) => string;
   onStatus: (s: BookingStatus) => void;
   onClose: () => void;
 }) {
   const staff = STAFF.find((s) => s.id === booking.staffId);
   const branch = branchById(booking.branchId)!;
-  const services = booking.serviceIds.map((id) => serviceById(id)?.name).join(" + ");
+  const services = booking.serviceIds.map((id) => svcName(id)).join(" + ");
   const reminder = [
     `¡Hola ${booking.client.name.split(" ")[0]}! Te escribimos de UBEE ${branch.name}.`,
     `Te recordamos tu turno de ${services} el ${formatDay(booking.date)} a las ${booking.time} h${staff ? ` con ${staff.name}` : ""}.`,

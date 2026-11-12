@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { BookingWizard } from "@/components/booking/booking-wizard";
+import { getContent } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Reservar turno",
@@ -10,9 +11,9 @@ export const metadata: Metadata = {
 type SP = PageProps<"/reservar">["searchParams"];
 
 async function Wizard({ searchParams }: { searchParams: SP }) {
-  const sp = await searchParams;
+  const [sp, { services }] = await Promise.all([searchParams, getContent()]);
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  return <BookingWizard initialService={one(sp.servicio)} initialBranch={one(sp.sucursal)} />;
+  return <BookingWizard services={services} initialService={one(sp.servicio)} initialBranch={one(sp.sucursal)} />;
 }
 
 export default function ReservarPage({ searchParams }: PageProps<"/reservar">) {

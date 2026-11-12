@@ -8,7 +8,7 @@ export function TechniqueMarquee() {
       {items.map((name) => (
         <li key={name} className="flex items-center">
           <span className="display whitespace-nowrap px-8 text-[clamp(2rem,4.5vw,3.75rem)] italic text-bone/90">{name}</span>
-          <span className="size-1.5 rounded-full bg-filament shadow-[0_0_12px_2px_rgba(233,184,114,0.6)]" />
+          <span className="size-1.5 rounded-full bg-filament shadow-[0_0_12px_2px_rgba(240,190,116,0.6)]" />
         </li>
       ))}
     </ul>

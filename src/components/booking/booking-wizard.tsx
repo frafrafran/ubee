@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,17 +17,18 @@ import {
 import {
   BRANCHES,
   CATEGORIES,
-  SERVICES,
   STAFF,
   branchById,
   img,
   minutes,
   money,
-  serviceById,
   wa,
   type BranchId,
   type CategoryId,
+  type Service,
 } from "@/lib/data";
+import { useLiveContent } from "@/lib/live-content";
+import { createBooking, fetchBusy } from "@/lib/bookings-api";
 import {
   eligibleStaff,
   formatDay,
@@ -35,11 +36,11 @@ import {
   icsFor,
   newCode,
   openDays,
-  saveBooking,
   slotsFor,
   toISODate,
   toMin,
   type Booking,
+  type Busy,
   type Slot,
 } from "@/lib/booking";
 import { Filament } from "@/components/brand/filament";
@@ -53,6 +54,13 @@ const STEPS = ["Sucursal", "Servicio", "Profesional", "Día y horario", "Tus dat
 
 type Client = { name: string; phone: string; email: string; notes: string };
 
+/** The service catalogue (from the database, or the demo content). */
+const Catalog = createContext<Service[]>([]);
+function useServiceById() {
+  const list = useContext(Catalog);
+  return useCallback((id: string) => list.find((s) => s.id === id), [list]);
+}
+
 /** "0351 15 555-1234" / "351 555 1234" → "5493515551234" (formato que espera wa.me) */
 function toWhatsApp(raw: string) {
   let d = raw.replace(/\D/g, "");
@@ -63,7 +71,17 @@ function toWhatsApp(raw: string) {
   return `549${d}`;
 }
 
-export function BookingWizard({ initialService, initialBranch }: { initialService?: string; initialBranch?: string }) {
+export function BookingWizard({
+  services: catalogInitial,
+  initialService,
+  initialBranch,
+}: {
+  services: Service[];
+  initialService?: string;
+  initialBranch?: string;
+}) {
+  const catalog = useLiveContent("services", catalogInitial);
+  const serviceById = (id: string) => catalog.find((s) => s.id === id);
   const presetBranch = branchById(initialBranch ?? "")?.id ?? null;
   const presetService = serviceById(initialService ?? "")?.id;
 
@@ -76,6 +94,9 @@ export function BookingWizard({ initialService, initialBranch }: { initialServic
   const [client, setClient] = useState<Client>({ name: "", phone: "", email: "", notes: "" });
   const [club, setClub] = useState(true);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const mounted = useHydrated();
 
   const services = serviceIds.map((id) => serviceById(id)!).filter(Boolean);
@@ -104,8 +125,9 @@ export function BookingWizard({ initialService, initialBranch }: { initialServic
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  const confirm = () => {
-    if (!branchId || !slot || !assigned || !date) return;
+  const confirm = async (): Promise<boolean> => {
+    if (!branchId || !slot || !assigned || !date) return false;
+    setSubmitError(null);
     const createdAt = new Date();
     const b: Booking = {
       id: `web-${createdAt.getTime()}`,
@@ -128,15 +150,34 @@ export function BookingWizard({ initialService, initialBranch }: { initialServic
       source: "web",
       createdAt: createdAt.toISOString(),
     };
-    saveBooking(b);
+    const result = await createBooking(b);
+    if (!result.ok) {
+      if (result.reason === "taken") {
+        // Someone took this exact time a moment ago: reload availability and go back.
+        setConflict(true);
+        setPicked(null);
+        setRefresh((r) => r + 1);
+        go(3);
+      } else {
+        setSubmitError("No pudimos guardar el turno. Revisá tu conexión e intentá de nuevo, o escribinos por WhatsApp.");
+      }
+      return false;
+    }
     setBooking(b);
     setStep(5);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    return true;
   };
 
-  if (booking) return <Confirmation booking={booking} />;
+  if (booking)
+    return (
+      <Catalog.Provider value={catalog}>
+        <Confirmation booking={booking} />
+      </Catalog.Provider>
+    );
 
   return (
+    <Catalog.Provider value={catalog}>
     <div className="relative min-h-[100svh] pb-32 pt-28 md:pt-32">
       <div className="mx-auto max-w-[1280px] px-5 md:px-10">
         <header className="mb-10 md:mb-14">
@@ -197,7 +238,12 @@ export function BookingWizard({ initialService, initialBranch }: { initialServic
                     slot={slot}
                     onSlot={setSlot}
                     onBack={() => go(2)}
-                    onNext={() => go(4)}
+                    onNext={() => {
+                      setConflict(false);
+                      go(4);
+                    }}
+                    refresh={refresh}
+                    conflict={conflict}
                   />
                 )}
                 {step === 4 && (
@@ -208,6 +254,7 @@ export function BookingWizard({ initialService, initialBranch }: { initialServic
                     onClub={setClub}
                     onBack={() => go(3)}
                     onConfirm={confirm}
+                    error={submitError}
                   />
                 )}
               </motion.div>
@@ -229,6 +276,7 @@ export function BookingWizard({ initialService, initialBranch }: { initialServic
         </div>
       </div>
     </div>
+    </Catalog.Provider>
   );
 }
 
@@ -241,7 +289,7 @@ function Progress({ step }: { step: number }) {
         <li key={s} aria-current={i === step ? "step" : undefined}>
           <div className="relative h-px overflow-hidden bg-bone/15">
             <motion.div
-              className="absolute inset-0 origin-left bg-filament shadow-[0_0_10px_1px_rgba(233,184,114,0.7)]"
+              className="absolute inset-0 origin-left bg-filament shadow-[0_0_10px_1px_rgba(240,190,116,0.7)]"
               initial={false}
               animate={{ scaleX: i < step ? 1 : i === step ? 0.5 : 0 }}
               transition={{ duration: 0.6, ease: EASE }}
@@ -373,6 +421,8 @@ function StepServices({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const catalog = useContext(Catalog);
+  const serviceById = useServiceById();
   const [cat, setCat] = useState<CategoryId>(
     (value[0] && serviceById(value[0])?.category) || "color",
   );
@@ -413,7 +463,7 @@ function StepServices({
         ))}
       </div>
       <ul className="grid gap-3" role="tabpanel">
-        {SERVICES.filter((s) => s.category === cat).map((s) => {
+        {catalog.filter((s) => s.category === cat).map((s) => {
           const on = value.includes(s.id);
           return (
             <li key={s.id}>
@@ -546,6 +596,8 @@ function StepTime({
   onSlot,
   onBack,
   onNext,
+  refresh,
+  conflict,
 }: {
   branchId: BranchId;
   duration: number;
@@ -556,25 +608,48 @@ function StepTime({
   onSlot: (s: Slot) => void;
   onBack: () => void;
   onNext: () => void;
+  refresh: number;
+  conflict: boolean;
 }) {
   const staffKey = staffIds.join(",");
+  const dates = useMemo(() => openDays(branchId, 14, new Date()), [branchId]);
+
+  // Busy times for the next two weeks, fetched once per branch (and again
+  // after a booking conflict). Kept with the key it was fetched for, so a
+  // stale answer is never shown for a different branch.
+  const fetchKey = `${branchId}|${refresh}`;
+  const [loaded, setLoaded] = useState<{ key: string; busy: Busy[]; failed?: boolean } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchBusy(branchId, dates)
+      .then((busy) => alive && setLoaded({ key: fetchKey, busy }))
+      .catch(() => alive && setLoaded({ key: fetchKey, busy: [], failed: true }));
+    return () => {
+      alive = false;
+    };
+  }, [branchId, dates, fetchKey]);
+  const busy = loaded?.key === fetchKey ? loaded.busy : null;
+  const failed = loaded?.key === fetchKey && loaded.failed;
+
   const days = useMemo(() => {
+    if (!busy) return null;
     const now = new Date();
     const ids = staffKey.split(",");
-    return openDays(branchId, 14, now).map((d) => ({
+    return dates.map((d) => ({
       date: d,
-      free: slotsFor({ branchId, date: d, duration, staffIds: ids, now }),
+      free: slotsFor({ branchId, date: d, duration, staffIds: ids, busy, now }),
     }));
-  }, [branchId, duration, staffKey]);
+  }, [branchId, duration, staffKey, dates, busy]);
 
   useEffect(() => {
+    if (!days) return;
     if (!date || !days.some((d) => d.date === date)) {
       const first = days.find((d) => d.free.length);
       if (first) onDate(first.date);
     }
   }, [date, days, onDate]);
 
-  const current = days.find((d) => d.date === date);
+  const current = days?.find((d) => d.date === date);
   const morning = current?.free.filter((s) => toMin(s.time) < 13 * 60) ?? [];
   const afternoon = current?.free.filter((s) => toMin(s.time) >= 13 * 60) ?? [];
   const today = toISODate(new Date());
@@ -586,6 +661,25 @@ function StepTime({
         hint={`Te mostramos solo los horarios en los que entra tu servicio completo (${minutes(duration)}).`}
       />
 
+      {conflict ? (
+        <p role="alert" className="mb-6 rounded-2xl border border-filament/40 bg-filament/10 p-4 text-sm text-bone">
+          Ese horario se acaba de ocupar mientras completabas tus datos. Te mostramos la agenda actualizada: elegí otro y
+          listo.
+        </p>
+      ) : null}
+      {failed ? (
+        <p role="alert" className="mb-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-bone">
+          No pudimos consultar la agenda. Revisá tu conexión o escribinos por WhatsApp y te damos un turno.
+        </p>
+      ) : null}
+
+      {!days ? (
+        <div className="flex gap-2 overflow-hidden" aria-busy="true" aria-label="Cargando horarios disponibles">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="h-[6.6rem] w-[4.75rem] shrink-0 animate-pulse rounded-2xl bg-walnut" />
+          ))}
+        </div>
+      ) : (
       <div className="no-scrollbar -mx-5 flex snap-x gap-2 overflow-x-auto px-5 pb-2 md:mx-0 md:px-0" role="listbox" aria-label="Días">
         {days.map((d) => {
           const on = d.date === date;
@@ -618,6 +712,7 @@ function StepTime({
           );
         })}
       </div>
+      )}
 
       {current ? (
         <div className="mt-8 grid gap-8">
@@ -641,7 +736,7 @@ function StepTime({
                         className={cn(
                           "press h-12 rounded-xl border text-sm tabular",
                           on
-                            ? "border-filament bg-filament/15 text-filament-soft shadow-[0_0_18px_-4px_rgba(233,184,114,0.7)]"
+                            ? "border-filament bg-filament/15 text-filament-soft shadow-[0_0_18px_-4px_rgba(240,190,116,0.7)]"
                             : "border-bone/10 bg-walnut text-bone/85 hover:border-bone/35",
                         )}
                       >
@@ -657,11 +752,11 @@ function StepTime({
             <p className="text-sm text-stone">Este día ya no tiene lugar. Probá con otro.</p>
           ) : null}
         </div>
-      ) : (
+      ) : days ? (
         <p className="mt-8 text-sm text-stone">
           No encontramos lugar en las próximas dos semanas para este servicio. Escribinos por WhatsApp y lo resolvemos.
         </p>
-      )}
+      ) : null}
 
       <Nav onBack={onBack} onNext={onNext} disabled={!slot} />
     </section>
@@ -677,13 +772,15 @@ function StepClient({
   onClub,
   onBack,
   onConfirm,
+  error,
 }: {
   value: Client;
   onChange: (c: Client) => void;
   club: boolean;
   onClub: (v: boolean) => void;
   onBack: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<boolean>;
+  error: string | null;
 }) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
@@ -703,7 +800,9 @@ function StepClient({
       return;
     }
     setBusy(true);
-    window.setTimeout(onConfirm, 650);
+    void onConfirm().then((ok) => {
+      if (!ok) setBusy(false);
+    });
   };
 
   const field = (key: keyof Client, label: string, props: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -765,6 +864,12 @@ function StepClient({
           </span>
         </span>
       </label>
+
+      {error ? (
+        <p role="alert" className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-bone">
+          {error}
+        </p>
+      ) : null}
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-bone/10 pt-6">
         <button
@@ -893,9 +998,10 @@ function Summary({
 /* ── Confirmación ───────────────────────────────────────────── */
 
 function Confirmation({ booking }: { booking: Booking }) {
+  const serviceById = useServiceById();
   const branch = branchById(booking.branchId)!;
   const staff = STAFF.find((s) => s.id === booking.staffId);
-  const services = booking.serviceIds.map((id) => serviceById(id)!.name).join(" + ");
+  const services = booking.serviceIds.map((id) => serviceById(id)?.name ?? id).join(" + ");
   const when = `${formatDay(booking.date)} a las ${booking.time} h`;
 
   const message = [
@@ -928,7 +1034,7 @@ function Confirmation({ booking }: { booking: Booking }) {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, ease: EASE }}
-          className="mx-auto grid size-16 place-items-center rounded-full bg-filament text-ink shadow-[0_0_40px_0_rgba(233,184,114,0.55)]"
+          className="mx-auto grid size-16 place-items-center rounded-full bg-filament text-ink shadow-[0_0_40px_0_rgba(240,190,116,0.55)]"
         >
           <Check className="size-7" strokeWidth={2} aria-hidden />
         </motion.div>

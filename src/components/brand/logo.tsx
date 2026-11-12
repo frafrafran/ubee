@@ -57,7 +57,7 @@ export function Logo({
           textLength="396"
           lengthAdjust="spacing"
           fill="currentColor"
-          style={{ font: "700 12.5px var(--font-syncopate), sans-serif", letterSpacing: "0.1em" }}
+          style={{ font: "700 12.5px var(--ff-wide), sans-serif", letterSpacing: "0.1em" }}
         >
           MODERN HAIR STUDIO
         </text>

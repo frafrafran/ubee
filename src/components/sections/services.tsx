@@ -4,17 +4,19 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { ArrowRight, ArrowUpRight, Clock } from "lucide-react";
-import { CATEGORIES, SERVICES, img, minutes, money, type CategoryId } from "@/lib/data";
+import { CATEGORIES, img, minutes, money, type CategoryId, type Service } from "@/lib/data";
+import { useLiveContent } from "@/lib/live-content";
 import { Reveal, SplitReveal } from "@/components/site/reveal";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
-export function Services() {
+export function Services({ services: initial }: { services: Service[] }) {
+  const services = useLiveContent("services", initial);
   const [active, setActive] = useState<CategoryId>("color");
   const [hover, setHover] = useState<CategoryId | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const list = SERVICES.filter((s) => s.category === active);
+  const list = services.filter((s) => s.category === active);
 
   const choose = (id: CategoryId) => {
     setActive(id);
@@ -79,7 +81,7 @@ export function Services() {
                     </span>
                     <span
                       className={cn(
-                        "absolute -bottom-2 left-0 h-px w-full origin-left bg-filament shadow-[0_0_14px_1px_rgba(233,184,114,0.8)] transition-transform duration-500 ease-[var(--ease-out)]",
+                        "absolute -bottom-2 left-0 h-px w-full origin-left bg-filament shadow-[0_0_14px_1px_rgba(240,190,116,0.8)] transition-transform duration-500 ease-[var(--ease-out)]",
                         isHover ? "scale-x-100" : "scale-x-0",
                       )}
                     />

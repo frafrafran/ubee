@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { Agenda } from "@/components/panel/agenda";
+import { PanelApp } from "@/components/panel/panel-app";
+import { getContent } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Panel del salón",
   robots: { index: false, follow: false },
 };
 
-export default function PanelPage() {
-  return <Agenda />;
+export default async function PanelPage() {
+  const content = await getContent();
+  return <PanelApp content={content} />;
 }

@@ -2,23 +2,19 @@
 
 import Link from "next/link";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Filament } from "@/components/brand/filament";
 import { Cta } from "@/components/site/cta";
 import { SplitReveal } from "@/components/site/reveal";
-import { formatDay, nextAvailable, toISODate } from "@/lib/booking";
+import { formatDay, nextAvailable, openDays, toISODate } from "@/lib/booking";
+import { fetchBusy } from "@/lib/bookings-api";
 import { img } from "@/lib/data";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
-/* The next free slot depends on the visitor's clock, so it is read on the
- * client only (server snapshot = null) and cached for the session. */
-let nextSlotCache: string | null | undefined;
-function readNextSlot() {
-  if (nextSlotCache !== undefined) return nextSlotCache;
-  const now = new Date();
-  const n = nextAvailable("cordoba", 60, now);
-  if (!n) return (nextSlotCache = null);
+/* The next free slot depends on the visitor's clock and on live bookings,
+ * so it is resolved on the client after the page is shown. */
+function labelFor(n: { date: string; time: string }, now: Date) {
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
   const day =
@@ -27,12 +23,26 @@ function readNextSlot() {
       : n.date === toISODate(tomorrow)
         ? "mañana"
         : formatDay(n.date, { weekday: "long", day: "numeric" });
-  return (nextSlotCache = `${day}, ${n.time} h`);
+  return `${day}, ${n.time} h`;
 }
-const noopSubscribe = () => () => {};
 
 function useNextSlot() {
-  return useSyncExternalStore(noopSubscribe, readNextSlot, () => null);
+  const [label, setLabel] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const now = new Date();
+    const dates = openDays("cordoba", 7, now);
+    fetchBusy("cordoba", dates)
+      .then((busy) => {
+        const n = nextAvailable("cordoba", busy, 60, now);
+        if (alive) setLabel(n ? labelFor(n, now) : "consultanos por WhatsApp");
+      })
+      .catch(() => alive && setLabel("consultanos por WhatsApp"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return label;
 }
 
 export function Hero() {
@@ -57,7 +67,7 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(60% 50% at 78% 38%, rgba(233,184,114,0.13), transparent 70%), radial-gradient(50% 60% at 10% 100%, rgba(42,34,28,0.9), transparent 70%)",
+            "radial-gradient(60% 50% at 78% 38%, rgba(240,190,116,0.13), transparent 70%), radial-gradient(55% 60% at 8% 100%, rgba(21,32,45,0.75), transparent 70%), radial-gradient(40% 45% at 100% 0%, rgba(21,32,45,0.5), transparent 70%)",
         }}
       />
 

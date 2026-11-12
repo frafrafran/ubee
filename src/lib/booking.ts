@@ -200,7 +200,10 @@ export function agendaFor(staff: Staff, branchId: BranchId, date: string, stored
   ].sort((a, b) => toMin(a.time) - toMin(b.time));
 }
 
-function isFree(agenda: Booking[], start: number, duration: number) {
+/** Minimal shape needed to block a slot: who, when, for how long. */
+export type Busy = { staffId: string; date: string; time: string; duration: number };
+
+function isFree(agenda: Busy[], start: number, duration: number) {
   const end = start + duration;
   return agenda.every((b) => {
     const s = toMin(b.time);
@@ -210,41 +213,44 @@ function isFree(agenda: Booking[], start: number, duration: number) {
 
 export type Slot = { time: string; staffIds: string[] };
 
-/** Horarios en los que entra el servicio completo. */
+/**
+ * Horarios en los que entra el servicio completo.
+ * "busy" son los turnos ya tomados (de la demo o de Supabase).
+ */
 export function slotsFor({
   branchId,
   date,
   duration,
   staffIds,
+  busy,
   now = new Date(),
 }: {
   branchId: BranchId;
   date: string;
   duration: number;
   staffIds: string[];
+  busy: Busy[];
   now?: Date;
 }): Slot[] {
   const branch = branchById(branchId)!;
-  const stored = loadBookings();
-  const team = STAFF.filter((s) => staffIds.includes(s.id));
-  const agendas = team.map((s) => [s, agendaFor(s, branchId, date, stored)] as const);
+  const agendas = staffIds.map((id) => [id, busy.filter((b) => b.staffId === id && b.date === date)] as const);
   const isToday = date === toISODate(now);
   const earliest = isToday ? now.getHours() * 60 + now.getMinutes() + 60 : 0;
 
   const slots: Slot[] = [];
   for (let t = branch.hours.open * 60; t + duration <= branch.hours.close * 60; t += STEP) {
     if (t < earliest) continue;
-    const free = agendas.filter(([, a]) => isFree(a, t, duration)).map(([s]) => s.id);
+    const free = agendas.filter(([, a]) => isFree(a, t, duration)).map(([id]) => id);
     if (free.length) slots.push({ time: toHHMM(t), staffIds: free });
   }
   return slots;
 }
 
 /** El primer turno libre de una sucursal, para mostrarlo en la portada. */
-export function nextAvailable(branchId: BranchId, duration = 60, now = new Date()) {
+export function nextAvailable(branchId: BranchId, busy: Busy[], duration = 60, now = new Date()) {
   const team = STAFF.filter((s) => s.branches.includes(branchId)).map((s) => s.id);
   for (const date of openDays(branchId, 7, now)) {
-    const slots = slotsFor({ branchId, date, duration, staffIds: team, now });
+    const slots = slotsFor({ branchId, date, duration, staffIds: team, busy, now });
     if (slots.length) return { date, time: slots[0].time };
   }
   return null;

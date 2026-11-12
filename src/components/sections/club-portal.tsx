@@ -75,7 +75,7 @@ export function ClubPortal() {
         [data-club] [data-gp-touch-picker]{display:none!important}
         [data-club] [data-gp-hint]{display:none}
         [data-club] [data-gp-caption]{inset:auto 20px 7%;justify-content:center}
-        [data-club] [data-gp-enter]{min-height:48px;padding:0 22px;gap:14px;border-radius:999px;border:1px solid rgba(243,238,231,.22);color:var(--bone);font:700 9.5px/1 var(--font-syncopate),sans-serif;letter-spacing:.3em;text-transform:uppercase;backdrop-filter:blur(8px);transition:border-color .2s ease,color .2s ease}
+        [data-club] [data-gp-enter]{min-height:48px;padding:0 22px;gap:14px;border-radius:999px;border:1px solid rgba(243,238,231,.22);color:var(--bone);font:700 9.5px/1 var(--ff-wide),sans-serif;letter-spacing:.3em;text-transform:uppercase;backdrop-filter:blur(8px);transition:border-color .2s ease,color .2s ease}
         [data-club] [data-gp-enter]:hover{border-color:var(--filament);color:var(--filament-soft)}
         [data-club] [data-gp-content]{padding:clamp(88px,10vh,140px) clamp(20px,5vw,80px);grid-template-columns:minmax(0,1fr)}
         [data-club] [data-gp-letter]:focus-visible{outline-color:var(--filament)}
@@ -94,7 +94,7 @@ export function ClubPortal() {
             "--gp-ink": "var(--bone)",
             "--gp-field": "#120d09",
             "--gp-foreground": "var(--bone)",
-            fontFamily: "var(--font-body), sans-serif",
+            fontFamily: "var(--ff-body), sans-serif",
           }}
           background={
             <div className="absolute inset-0" style={{ transform: "scale(var(--gp-field-scale,1))" }}>
@@ -103,7 +103,7 @@ export function ClubPortal() {
                 className="absolute inset-0"
                 style={{
                   background:
-                    "radial-gradient(70% 60% at 50% 45%, rgba(233,184,114,0.18), transparent 70%), linear-gradient(180deg, rgba(13,11,9,0.62), rgba(13,11,9,0.86))",
+                    "radial-gradient(70% 60% at 50% 45%, rgba(240,190,116,0.18), transparent 70%), linear-gradient(180deg, rgba(16,12,9,0.6), rgba(16,12,9,0.84)), linear-gradient(0deg, rgba(21,32,45,0.35), transparent 60%)",
                 }}
               />
             </div>

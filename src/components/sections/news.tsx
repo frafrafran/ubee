@@ -4,8 +4,9 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { ArrowUpRight, Crown } from "lucide-react";
-import { BRANCHES, LINKS, NEWS, NEWS_TYPES, img, wa, type NewsType } from "@/lib/data";
+import { BRANCHES, LINKS, NEWS_TYPES, img, wa, type NewsItem, type NewsType } from "@/lib/data";
 import { formatDay } from "@/lib/booking";
+import { useLiveContent } from "@/lib/live-content";
 import { SplitReveal } from "@/components/site/reveal";
 import { cn } from "@/lib/utils";
 
@@ -28,9 +29,10 @@ function resolve(href: string) {
   return { href, external: href.startsWith("mailto:") };
 }
 
-export function News() {
+export function News({ news: initial }: { news: NewsItem[] }) {
+  const news = useLiveContent("news", initial);
   const [filter, setFilter] = useState<NewsType | "todo">("todo");
-  const items = NEWS.filter((n) => filter === "todo" || n.type === filter);
+  const items = news.filter((n) => filter === "todo" || n.type === filter);
 
   return (
     <section id="novedades" aria-labelledby="novedades-titulo" className="relative scroll-mt-20 py-24 md:py-36">
@@ -97,7 +99,7 @@ export function News() {
                         {TYPE_LABEL[n.type]}
                       </span>
                       {n.members ? (
-                        <span className="label-wide inline-flex items-center gap-1.5 rounded-full bg-filament px-3 py-1.5 !text-[0.5rem] text-ink">
+                        <span className="label-wide inline-flex items-center gap-1.5 rounded-full bg-ember px-3 py-1.5 !text-[0.5rem] text-ink">
                           <Crown className="size-3" strokeWidth={1.8} aria-hidden /> Club
                         </span>
                       ) : null}

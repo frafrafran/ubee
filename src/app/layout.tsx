@@ -1,30 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Bodoni_Moda, Hanken_Grotesk, Syncopate } from "next/font/google";
 import { SmoothScroll } from "@/components/site/smooth-scroll";
 import { Header } from "@/components/site/header";
 import { Footer } from "@/components/site/footer";
 import "./globals.css";
 
-const bodoni = Bodoni_Moda({
-  variable: "--font-bodoni",
-  subsets: ["latin"],
-  style: ["normal", "italic"],
-  axes: ["opsz"],
-  display: "swap",
-});
-
-const syncopate = Syncopate({
-  variable: "--font-syncopate",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  display: "swap",
-});
-
-const hanken = Hanken_Grotesk({
-  variable: "--font-body",
-  subsets: ["latin"],
-  display: "swap",
-});
+/*
+ * Type system (Fontshare · ITF Free Font License, free for commercial use):
+ *   Melodrama — display. High-contrast serif with geometric bowls that echo
+ *               the round U and the dots of the UBEE wordmark.
+ *   Boska     — italic accents. Sharp, calligraphic; the "luz" in the copy.
+ *   Panchang  — wide labels, the voice of "MODERN HAIR STUDIO".
+ *   Switzer   — body and UI.
+ * Served from Fontshare's CDN, as the license intends for the web.
+ */
+const FONTS =
+  "https://api.fontshare.com/v2/css?f[]=melodrama@300,400,500&f[]=boska@300,400,300i,400i&f[]=panchang@500,600,700,800&f[]=switzer@400,500,600&display=swap";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://ubee.com.ar"),
@@ -43,13 +33,19 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0d0b09",
+  themeColor: "#100c09",
   colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es-AR" className={`${bodoni.variable} ${syncopate.variable} ${hanken.variable} antialiased`}>
+    <html lang="es-AR" className="antialiased">
+      <head>
+        <link rel="preconnect" href="https://api.fontshare.com" crossOrigin="" />
+        <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="" />
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="stylesheet" href={FONTS} />
+      </head>
       <body className="min-h-dvh">
         <SmoothScroll>
           <Header />

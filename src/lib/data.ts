@@ -6,8 +6,14 @@
  * por los reales antes de publicar.
  * ───────────────────────────────────────────────────────────── */
 
-export const img = (id: string, w = 1200, h?: number) =>
-  `https://images.unsplash.com/photo-${id}?w=${w}${h ? `&h=${h}` : ""}&q=78&auto=format&fit=crop`;
+/**
+ * Image source. Accepts an Unsplash photo id (demo images), or any full URL
+ * / data URL — which is what the panel stores when the salon uploads a photo.
+ */
+export const img = (id: string, w = 1200, h?: number) => {
+  if (/^(https?:|data:|blob:|\/)/.test(id)) return id;
+  return `https://images.unsplash.com/photo-${id}?w=${w}${h ? `&h=${h}` : ""}&q=78&auto=format&fit=crop`;
+};
 
 export const LINKS = {
   instagram: "https://www.instagram.com/ubeepeluqueria/",
@@ -108,6 +114,7 @@ export type Service = {
   /** DEMO: precio "desde", en pesos */
   price: number;
   signature?: boolean;
+  active?: boolean;
 };
 
 export const SERVICES: Service[] = [
@@ -331,7 +338,7 @@ export const NEWS_TYPES: { id: NewsType | "todo"; label: string }[] = [
 ];
 
 /* DEMO: los beneficios y fechas son ejemplos para mostrar la sección. */
-export const NEWS: {
+export type NewsItem = {
   id: string;
   type: NewsType;
   title: string;
@@ -340,7 +347,10 @@ export const NEWS: {
   image: string;
   cta: { label: string; href: string };
   members?: boolean;
-}[] = [
+  published?: boolean;
+};
+
+export const NEWS: NewsItem[] = [
   {
     id: "workshop-balayage",
     type: "workshop",
@@ -411,7 +421,15 @@ export type Product = {
   price: number;
   image: string;
   note: string;
+  active?: boolean;
 };
+
+/** What the salon edits from the panel. Branches and team stay in code. */
+export type Content = { services: Service[]; products: Product[]; news: NewsItem[] };
+
+export function staticContent(): Content {
+  return { services: SERVICES, products: PRODUCTS, news: NEWS };
+}
 
 export const PRODUCT_CATEGORIES = ["Todo", "Rubios", "Hidratación", "Reparación", "Styling", "Herramientas"];
 

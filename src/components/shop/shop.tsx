@@ -4,10 +4,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { useLenis } from "lenis/react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
-import { BRANCHES, PRODUCTS, PRODUCT_CATEGORIES, img, money, wa, type BranchId, type Product } from "@/lib/data";
+import { BRANCHES, PRODUCT_CATEGORIES, img, money, wa, type BranchId, type Product } from "@/lib/data";
 import { SplitReveal } from "@/components/site/reveal";
 import { WhatsAppIcon } from "@/components/site/icons";
 import { cn } from "@/lib/utils";
+import { useLiveContent } from "@/lib/live-content";
 
 const KEY = "ubee.cart.v1";
 const EASE = [0.32, 0.72, 0, 1] as const;
@@ -58,11 +59,12 @@ function useCart() {
   return { cart, set, clear: () => update({}) };
 }
 
-export function Shop() {
+export function Shop({ products: initial }: { products: Product[] }) {
+  const products = useLiveContent("products", initial);
   const [cat, setCat] = useState("Todo");
   const [open, setOpen] = useState(false);
   const { cart, set, clear } = useCart();
-  const items = PRODUCTS.filter((p) => cat === "Todo" || p.category === cat);
+  const items = products.filter((p) => cat === "Todo" || p.category === cat);
   const count = Object.values(cart).reduce((a, b) => a + b, 0);
 
   return (
@@ -133,7 +135,7 @@ export function Shop() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ duration: 0.5, ease: EASE }}
-            className="press fixed bottom-5 right-5 z-30 flex h-14 items-center gap-3 rounded-full bg-filament pl-5 pr-2 text-ink shadow-[0_10px_40px_-8px_rgba(233,184,114,0.6)] hover:bg-filament-soft"
+            className="press fixed bottom-5 right-5 z-30 flex h-14 items-center gap-3 rounded-full bg-filament pl-5 pr-2 text-ink shadow-[0_10px_40px_-8px_rgba(240,190,116,0.6)] hover:bg-filament-soft"
           >
             <ShoppingBag className="size-5" strokeWidth={1.6} aria-hidden />
             <span className="text-sm">Ver pedido</span>
@@ -143,7 +145,7 @@ export function Shop() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {open ? <CartDrawer cart={cart} set={set} clear={clear} onClose={() => setOpen(false)} /> : null}
+        {open ? <CartDrawer products={products} cart={cart} set={set} clear={clear} onClose={() => setOpen(false)} /> : null}
       </AnimatePresence>
     </div>
   );
@@ -220,11 +222,13 @@ function Stepper({ qty, onQty, label }: { qty: number; onQty: (q: number) => voi
 }
 
 function CartDrawer({
+  products,
   cart,
   set,
   clear,
   onClose,
 }: {
+  products: Product[];
   cart: Cart;
   set: (id: string, q: number) => void;
   clear: () => void;
@@ -236,9 +240,9 @@ function CartDrawer({
   const lines = useMemo(
     () =>
       Object.entries(cart)
-        .map(([id, qty]) => ({ p: PRODUCTS.find((x) => x.id === id)!, qty }))
+        .map(([id, qty]) => ({ p: products.find((x) => x.id === id)!, qty }))
         .filter((l) => l.p),
-    [cart],
+    [cart, products],
   );
   const total = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
   const b = BRANCHES.find((x) => x.id === branch)!;
