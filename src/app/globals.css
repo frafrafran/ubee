@@ -1,26 +1,215 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────
+ * UBEE · Modern Hair Studio — design tokens
+ * The palette is the salon itself: dark walnut walls (ink/walnut),
+ * the travertine counter (bone), and the warm LED filament that
+ * runs above reception (filament). Gold is a light, not a paint:
+ * it only appears where something switches on.
+ * ───────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #0d0b09;
+  --walnut: #17120e;
+  --umber: #2a221c;
+  --line: #3a3029;
+  --filament: #e9b872;
+  --filament-soft: #f4d9a8;
+  --bone: #f3eee7;
+  --paper: #fbf9f5;
+  --stone: #a39a90;
+  --stone-dark: #6f655c;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* shadcn mapping */
+  --background: var(--ink);
+  --foreground: var(--bone);
+  --card: var(--walnut);
+  --card-foreground: var(--bone);
+  --popover: var(--walnut);
+  --popover-foreground: var(--bone);
+  --primary: var(--bone);
+  --primary-foreground: var(--ink);
+  --secondary: var(--umber);
+  --secondary-foreground: var(--bone);
+  --muted: var(--umber);
+  --muted-foreground: var(--stone);
+  --accent: var(--filament);
+  --accent-foreground: var(--ink);
+  --destructive: #e5674f;
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--filament);
+  --radius: 0.75rem;
 }
 
 @theme inline {
+  --color-ink: var(--ink);
+  --color-walnut: var(--walnut);
+  --color-umber: var(--umber);
+  --color-line: var(--line);
+  --color-filament: var(--filament);
+  --color-filament-soft: var(--filament-soft);
+  --color-bone: var(--bone);
+  --color-paper: var(--paper);
+  --color-stone: var(--stone);
+  --color-stone-dark: var(--stone-dark);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-bodoni);
+  --font-wide: var(--font-syncopate);
+  --font-heading: var(--font-bodoni);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  --animate-marquee: marquee var(--marquee-duration, 40s) linear infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    background: var(--ink);
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--ink);
+    color: var(--bone);
+    font-family: var(--font-body), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--filament);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--filament);
+    outline-offset: 3px;
+  }
+  img {
+    user-select: none;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis:not(.lenis-autoToggle).lenis-stopped {
+  overflow: clip;
+}
+.lenis [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+@layer utilities {
+  /* Wide caps label — echoes the "MODERN HAIR STUDIO" line of the logo */
+  .label-wide {
+    font-family: var(--font-syncopate), sans-serif;
+    font-weight: 700;
+    font-size: 0.625rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    line-height: 1.6;
+  }
+  .display {
+    font-family: var(--font-bodoni), "Didot", serif;
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* The arched mirror frame from the salon */
+  .arch {
+    border-radius: 999px 999px 1.25rem 1.25rem;
+  }
+  .glow-filament {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--filament) 55%, transparent),
+      0 0 24px -2px color-mix(in oklab, var(--filament) 50%, transparent),
+      0 0 90px -10px color-mix(in oklab, var(--filament) 35%, transparent);
+  }
+  .grain {
+    position: relative;
+    isolation: isolate;
+  }
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+/* Pressable — every button confirms it was heard */
+.press {
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 300ms ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UBEE · Modern Hair Studio — sitio web
 
-## Getting Started
+Sitio de UBEE Peluquería (Córdoba y Villa Carlos Paz) con reservas online, Club de beneficios, novedades, tienda con pedido por WhatsApp y un panel de agenda para el salón.
 
-First, run the development server:
+## Páginas
+
+| Ruta | Qué es |
+| --- | --- |
+| `/` | Home: hero, técnicas, servicios, trabajos, Club (portal tipográfico), novedades, tienda, sucursales |
+| `/reservar` | Reserva en 5 pasos: sucursal → servicio → profesional → día y horario → datos. Acepta `?servicio=sunkiss` y `?sucursal=cordoba` |
+| `/tienda` | Catálogo con carrito y envío del pedido por WhatsApp a la sucursal elegida |
+| `/panel` | Agenda del salón por profesional (no indexada). Muestra al instante los turnos reservados desde la web |
+
+## Identidad
+
+- **Paleta** (`src/app/globals.css`): tinta `#0d0b09`, nogal `#17120e`, hueso `#f3eee7` y *filamento* `#e9b872`, la luz LED dorada de la recepción del salón.
+- **Tipografía**: Bodoni Moda (titulares), Syncopate (etiquetas, eco del "MODERN HAIR STUDIO" del logo), Hanken Grotesk (texto).
+- **Logo** (`src/components/brand/logo.tsx`): U·B:E·E redibujado en trazo monolínea; el punto superior de los dos puntos se enciende.
+- **Firma visual** (`src/components/brand/filament.tsx`): la línea de luz ondulada que se dibuja al cargar y con el scroll.
+
+## Contenido editable
+
+Todo el contenido está en **`src/lib/data.ts`**. Antes de publicar, reemplazar los valores de demo:
+
+- [ ] Precios de servicios (`SERVICES[].price`) y duraciones reales
+- [ ] Horarios de cada sucursal (`BRANCHES[].hours`)
+- [ ] Equipo real y qué servicios hace cada uno (`STAFF`)
+- [ ] Productos, precios y fotos de la tienda (`PRODUCTS`)
+- [ ] Beneficios y novedades del Club (`NEWS`)
+- [ ] Fotos propias del salón y de trabajos (hoy son imágenes de Unsplash)
+
+## Reservas: cómo funciona la demo
+
+`src/lib/booking.ts` calcula los horarios libres según la duración total de los servicios elegidos y la agenda de cada profesional. En la demo cada profesional tiene una agenda de ejemplo generada de forma determinística y los turnos nuevos se guardan en el navegador (`localStorage`), por eso aparecen en `/panel` del mismo equipo.
+
+Para producción, reemplazar `loadBookings` / `saveBooking` / `updateBookingStatus` por una base de datos compartida (por ejemplo Supabase) y sumar recordatorios automáticos por WhatsApp. La interfaz no cambia.
+
+## Desarrollo
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+npm run build
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Stack: Next.js 16 (App Router), React 19, Tailwind CSS 4, estructura shadcn (`src/components/ui`), Motion y Lenis.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Componentes de terceros en `src/components/ui`: `tilted-grid-hero` (galería curva) y `glyph-portal` (© Christian Katzmann, MIT).
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Diseño y desarrollo: FluxWeb.
